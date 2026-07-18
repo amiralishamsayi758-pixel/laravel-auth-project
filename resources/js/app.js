@@ -20,13 +20,22 @@ applyTheme(document.documentElement.classList.contains('dark') ? 'dark' : 'light
 
 document.querySelectorAll('[data-code-inputs]').forEach((group) => {
     const inputs = [...group.querySelectorAll('input')];
+    const codeValue = group.closest('form').querySelector('[data-code-value]');
+
+    const synchronizeCode = () => {
+        codeValue.value = inputs.map((input) => input.value).join('');
+    };
+
     inputs.forEach((input, index) => {
         input.addEventListener('input', () => {
             input.value = input.value.replace(/\D/g, '').slice(-1);
+            synchronizeCode();
             if (input.value && inputs[index + 1]) inputs[index + 1].focus();
         });
         input.addEventListener('keydown', (event) => {
             if (event.key === 'Backspace' && !input.value && inputs[index - 1]) inputs[index - 1].focus();
         });
     });
+
+    synchronizeCode();
 });

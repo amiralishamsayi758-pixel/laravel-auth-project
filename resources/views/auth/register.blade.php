@@ -15,11 +15,26 @@
                     <h1 class="text-2xl font-extrabold sm:text-3xl">اطلاعات خود را وارد کنید</h1>
                     <p class="mt-3 text-sm leading-7 text-slate-500 dark:text-slate-400">تمام فیلدها برای نسخه نهایی در نظر گرفته شده‌اند.</p>
                 </header>
-                <form action="#" method="post" class="space-y-5">
+                <form action="{{ route('register.store') }}" method="post" class="space-y-5">
                     @csrf
-                    <div><label class="field-label" for="gmail">آدرس جیمیل</label><input class="field-input" id="gmail" name="gmail" type="email" autocomplete="email" placeholder="example@gmail.com"><p class="field-help">آدرس باید به @gmail.com ختم شود.</p></div>
-                    <div><label class="field-label" for="phone">شماره موبایل</label><input class="field-input" id="phone" name="phone" type="tel" autocomplete="tel" inputmode="numeric" maxlength="11" placeholder="09123456789"><p class="field-help">شماره موبایل را با 09 وارد کنید.</p></div>
-                    <div><label class="field-label" for="username">نام کاربری</label><input class="field-input" id="username" name="username" type="text" autocomplete="username" placeholder="نام کاربری"><p class="field-help">نامی که در حساب شما نمایش داده می‌شود.</p></div>
+                    <div>
+                        <label class="field-label" for="gmail">آدرس جیمیل</label>
+                        <input @class(['field-input', 'is-invalid' => $errors->has('gmail')]) id="gmail" name="gmail" type="email" autocomplete="email" placeholder="example@gmail.com" value="{{ old('gmail') }}" aria-describedby="gmail-help gmail-error" @error('gmail') aria-invalid="true" @enderror>
+                        <p id="gmail-help" class="field-help">آدرس باید به @gmail.com ختم شود.</p>
+                        @error('gmail')<p id="gmail-error" class="field-error" role="alert">{{ $message }}</p>@enderror
+                    </div>
+                    <div>
+                        <label class="field-label" for="phone">شماره موبایل</label>
+                        <input @class(['field-input', 'is-invalid' => $errors->has('phone')]) id="phone" name="phone" type="tel" autocomplete="tel" inputmode="numeric" maxlength="11" placeholder="09123456789" value="{{ old('phone') }}" aria-describedby="phone-help phone-error" @error('phone') aria-invalid="true" @enderror>
+                        <p id="phone-help" class="field-help">شماره موبایل را با 09 وارد کنید.</p>
+                        @error('phone')<p id="phone-error" class="field-error" role="alert">{{ $message }}</p>@enderror
+                    </div>
+                    <div>
+                        <label class="field-label" for="username">نام کاربری</label>
+                        <input @class(['field-input', 'is-invalid' => $errors->has('username')]) id="username" name="username" type="text" autocomplete="username" placeholder="نام کاربری" value="{{ old('username') }}" aria-describedby="username-help username-error" @error('username') aria-invalid="true" @enderror>
+                        <p id="username-help" class="field-help">نامی که در حساب شما نمایش داده می‌شود.</p>
+                        @error('username')<p id="username-error" class="field-error" role="alert">{{ $message }}</p>@enderror
+                    </div>
                     <button class="primary-button" type="submit">ادامه و دریافت کد تأیید</button>
                 </form>
             </div>
