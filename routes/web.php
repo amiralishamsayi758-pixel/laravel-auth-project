@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
@@ -8,8 +9,11 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Auth\VerificationController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PasswordController;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -51,9 +55,17 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:6,1')
         ->name('verification.send');
 
-    Route::get('/dashboard', DashboardController::class)
-        ->middleware('verified')
-        ->name('dashboard');
     Route::post('/logout', [LoginController::class, 'destroy'])
         ->name('logout');
+
+    Route::middleware('verified')->group(function () {
+        Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+        Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+        Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::put('/profile/password', [PasswordController::class, 'update'])->name('profile.password.update');
+        Route::post('/profile/avatar', [AvatarController::class, 'store'])->name('profile.avatar.store');
+        Route::delete('/profile/avatar', [AvatarController::class, 'destroy'])->name('profile.avatar.destroy');
+        Route::delete('/profile', AccountDeletionController::class)->name('profile.destroy');
+    });
 });

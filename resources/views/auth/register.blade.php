@@ -10,6 +10,9 @@
         <div class="w-full max-w-lg">
             <x-brand-logo class="mb-8 lg:hidden" />
             <div class="w-full rounded-lg border border-white/75 bg-white/70 p-6 shadow-[0_22px_60px_-28px_rgba(15,23,42,.35)] backdrop-blur-xl dark:border-white/[.08] dark:bg-[#111b20]/85 sm:p-9 lg:p-10">
+                @if (session('status') === 'account-deleted')
+                    <div class="mb-5 rounded-md border border-teal-500/25 bg-teal-50/80 px-4 py-3 text-sm leading-7 text-teal-800 dark:border-teal-400/20 dark:bg-teal-500/[.08] dark:text-teal-200" role="status">حساب شما حذف شد.</div>
+                @endif
                 <header class="mb-8">
                     <p class="mb-2 text-sm font-semibold text-brand dark:text-teal-300">ایجاد حساب</p>
                     <h1 class="text-2xl font-extrabold sm:text-3xl">اطلاعات خود را وارد کنید</h1>

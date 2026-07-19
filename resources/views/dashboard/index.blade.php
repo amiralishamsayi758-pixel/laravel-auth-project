@@ -21,6 +21,7 @@
                     <div class="rounded-md border border-slate-200/70 bg-white/40 p-4 dark:border-white/10 dark:bg-white/[.04]"><dt class="text-xs text-slate-500 dark:text-slate-400">وضعیت جیمیل</dt><dd class="mt-2 font-bold">{{ $user->gmail_verified_at ? 'تأیید شده' : 'تأیید نشده' }}</dd></div>
                     <div class="rounded-md border border-slate-200/70 bg-white/40 p-4 dark:border-white/10 dark:bg-white/[.04]"><dt class="text-xs text-slate-500 dark:text-slate-400">زمان ایجاد حساب</dt><dd class="mt-2 font-bold" dir="ltr">{{ $user->created_at?->format('Y-m-d H:i') ?? 'نامشخص' }}</dd></div>
                 </dl>
+                <a href="{{ route('profile.edit') }}" class="mt-7 flex w-full items-center justify-center rounded-md border border-teal-600/25 bg-teal-50/60 px-5 py-3.5 font-bold text-brand transition hover:bg-teal-100 dark:border-teal-300/20 dark:bg-teal-500/[.07] dark:text-teal-200 dark:hover:bg-teal-500/[.12]">مدیریت پروفایل</a>
                 <form action="{{ route('logout') }}" method="post" class="mt-7">
                     @csrf
                     <button type="submit" class="w-full rounded-md border border-rose-500/25 bg-rose-50/60 px-5 py-3.5 font-bold text-rose-700 transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-500/[.07] dark:text-rose-200 dark:hover:bg-rose-500/[.12]">خروج امن</button>
