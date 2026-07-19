@@ -48,4 +48,12 @@ class UserTest extends TestCase
         $this->assertSame($user->password, $user->getAuthPassword());
         $this->assertSame('password', $user->getAuthPasswordName());
     }
+
+    public function test_password_reset_and_mail_notifications_use_gmail(): void
+    {
+        $user = User::factory()->make(['gmail' => 'reset-user@gmail.com']);
+
+        $this->assertSame('reset-user@gmail.com', $user->getEmailForPasswordReset());
+        $this->assertSame('reset-user@gmail.com', $user->routeNotificationFor('mail'));
+    }
 }

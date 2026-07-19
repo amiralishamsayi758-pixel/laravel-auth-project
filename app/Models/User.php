@@ -7,6 +7,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Notifications\Notification;
 
 class User extends Authenticatable
 {
@@ -47,5 +48,15 @@ class User extends Authenticatable
             'gmail_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function getEmailForPasswordReset(): string
+    {
+        return $this->gmail;
+    }
+
+    public function routeNotificationForMail(?Notification $notification = null): string
+    {
+        return $this->gmail;
     }
 }

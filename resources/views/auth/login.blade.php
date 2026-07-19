@@ -15,6 +15,9 @@
                     <h1 class="text-2xl font-extrabold sm:text-3xl">اطلاعات ورود را وارد کنید</h1>
                     <p class="mt-3 text-sm leading-7 text-slate-500 dark:text-slate-400">از جیمیل یا نام کاربری خود استفاده کنید.</p>
                 </header>
+                @if (session('status'))
+                    <div class="mb-5 rounded-md border border-teal-500/25 bg-teal-50/80 px-4 py-3 text-sm leading-7 text-teal-800 dark:border-teal-400/20 dark:bg-teal-500/[.08] dark:text-teal-200" role="status">{{ session('status') }}</div>
+                @endif
                 <form action="{{ route('login.store') }}" method="post" class="space-y-5">
                     @csrf
                     <div>
@@ -26,6 +29,7 @@
                         <label class="field-label" for="password">رمز عبور</label>
                         <input @class(['field-input', 'is-invalid' => $errors->has('password')]) id="password" name="password" type="password" autocomplete="current-password" aria-describedby="password-error" @if (! $errors->has('login') && $errors->has('password')) autofocus @endif @error('password') aria-invalid="true" @enderror>
                         @error('password')<p id="password-error" class="field-error" role="alert">{{ $message }}</p>@enderror
+                        <a class="mt-3 inline-block text-sm font-semibold text-brand hover:underline dark:text-teal-300" href="{{ route('password.request') }}">رمز عبور را فراموش کرده‌اید؟</a>
                     </div>
                     <button class="primary-button" type="submit">ورود</button>
                 </form>
