@@ -15,6 +15,9 @@
                     <h1 class="text-2xl font-extrabold sm:text-3xl">اطلاعات خود را وارد کنید</h1>
                     <p class="mt-3 text-sm leading-7 text-slate-500 dark:text-slate-400">تمام فیلدها برای نسخه نهایی در نظر گرفته شده‌اند.</p>
                 </header>
+                @error('registration')
+                    <div class="mb-5 rounded-md border border-rose-500/35 bg-rose-50/80 px-4 py-3 text-sm leading-7 text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/[.09] dark:text-rose-200" role="alert">{{ $message }}</div>
+                @enderror
                 <form action="{{ route('register.store') }}" method="post" class="space-y-5">
                     @csrf
                     <div>
