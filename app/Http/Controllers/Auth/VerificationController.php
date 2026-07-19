@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\RegistrationVerification as RegistrationVerificationModel;
 use App\Models\User;
 use App\Support\RegistrationValidation;
+use App\Support\RegistrationVerification;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
@@ -18,19 +20,31 @@ use Illuminate\Validation\ValidationException;
 
 class VerificationController extends Controller
 {
-    public function create(Request $request): View|RedirectResponse
+    public function create(Request $request, RegistrationVerification $verification): View|RedirectResponse
     {
-        if (! $request->session()->has('registration')) {
-            return redirect()->route('register.create');
+        $gmail = $this->pendingGmail($request);
+
+        if ($gmail === null) {
+            return redirect()->route('register.create')->withErrors([
+                'registration' => 'اطلاعات ثبت‌نام موجود نیست. لطفاً دوباره ثبت‌نام کنید.',
+            ]);
         }
 
-        return view('auth.verify');
+        $challenge = $verification->find($gmail);
+
+        return view('auth.verify', [
+            'resendAvailableAt' => $challenge?->resend_available_at?->timestamp ?? 0,
+        ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, RegistrationVerification $verification): RedirectResponse
     {
-        if (! $request->session()->has('registration')) {
-            return redirect()->route('register.create');
+        $gmail = $this->pendingGmail($request);
+
+        if ($gmail === null) {
+            return redirect()->route('register.create')->withErrors([
+                'registration' => 'اطلاعات ثبت‌نام موجود نیست. لطفاً دوباره ثبت‌نام کنید.',
+            ]);
         }
 
         $validatedCode = $request->validate([
@@ -40,25 +54,15 @@ class VerificationController extends Controller
             'code.digits' => 'کد تأیید باید دقیقاً ۶ رقم باشد.',
         ]);
 
-        $developmentCode = (string) config('verification.development_code');
-
-        if (! app()->environment(['local', 'testing']) || ! hash_equals($developmentCode, $validatedCode['code'])) {
-            throw ValidationException::withMessages([
-                'code' => 'کد تأیید واردشده صحیح نیست.',
-            ]);
-        }
-
         $registration = $request->session()->get('registration');
         $passwordHash = is_array($registration) ? ($registration['password_hash'] ?? null) : null;
 
         if (! is_string($passwordHash) || Hash::needsRehash($passwordHash)) {
             $request->session()->forget('registration');
 
-            return redirect()
-                ->route('register.create')
-                ->withErrors([
-                    'registration' => 'اطلاعات ثبت‌نام کامل نیست. لطفاً دوباره ثبت‌نام کنید.',
-                ]);
+            return redirect()->route('register.create')->withErrors([
+                'registration' => 'اطلاعات ثبت‌نام کامل نیست. لطفاً دوباره ثبت‌نام کنید.',
+            ]);
         }
 
         $registrationValidator = Validator::make(
@@ -77,11 +81,27 @@ class VerificationController extends Controller
         $validatedRegistration = $registrationValidator->validated();
 
         try {
-            $user = DB::transaction(function () use ($passwordHash, $validatedRegistration): User {
-                return User::create([
+            $user = DB::transaction(function () use ($gmail, $passwordHash, $validatedCode, $validatedRegistration, $verification): User {
+                $challenge = RegistrationVerificationModel::query()
+                    ->where('gmail', $gmail)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $challenge || ! $verification->isValid($challenge, $validatedCode['code'])) {
+                    throw ValidationException::withMessages([
+                        'code' => 'کد تأیید واردشده صحیح نیست یا منقضی شده است.',
+                    ]);
+                }
+
+                $user = User::create([
                     ...$validatedRegistration,
                     'password' => $passwordHash,
                 ]);
+
+                $user->forceFill(['gmail_verified_at' => now()])->save();
+                $challenge->delete();
+
+                return $user;
             });
         } catch (QueryException) {
             return redirect()
@@ -97,6 +117,29 @@ class VerificationController extends Controller
         $request->session()->regenerate();
         $request->session()->forget(['registration', 'verification.completed']);
 
-        return redirect()->route('verification.notice');
+        return redirect()->route('dashboard');
+    }
+
+    public function resend(Request $request, RegistrationVerification $verification): RedirectResponse
+    {
+        $gmail = $this->pendingGmail($request);
+
+        if ($gmail === null) {
+            return redirect()->route('register.create')->withErrors([
+                'registration' => 'اطلاعات ثبت‌نام موجود نیست. لطفاً دوباره ثبت‌نام کنید.',
+            ]);
+        }
+
+        $verification->resend($gmail);
+
+        return back()->with('status', 'verification-code-resent');
+    }
+
+    private function pendingGmail(Request $request): ?string
+    {
+        $registration = $request->session()->get('registration');
+        $gmail = is_array($registration) ? ($registration['gmail'] ?? null) : null;
+
+        return is_string($gmail) && $gmail !== '' ? $gmail : null;
     }
 }

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\RegistrationVerification;
 use App\Models\User;
+use App\Notifications\RegistrationVerificationCode;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Auth\Notifications\VerifyEmail;
@@ -160,22 +162,24 @@ class EmailVerificationTest extends TestCase
         Event::fake([Registered::class]);
 
         $this->post(route('register.store'), $this->registrationPayload());
-        $this->post(route('verification.store'), ['code' => '123456'])
-            ->assertRedirectToRoute('verification.notice');
+        $this->post(route('verification.store'), ['code' => RegistrationVerification::query()->sole()->code])
+            ->assertRedirectToRoute('dashboard');
 
         $user = User::query()->sole();
         Event::assertDispatched(Registered::class, fn (Registered $event): bool => $event->user->is($user));
     }
 
-    public function test_registration_sends_one_verification_notification(): void
+    public function test_registration_sends_one_code_notification_and_needs_no_second_link(): void
     {
         Notification::fake();
 
         $this->post(route('register.store'), $this->registrationPayload());
-        $this->post(route('verification.store'), ['code' => '123456']);
+        Notification::assertSentOnDemand(RegistrationVerificationCode::class);
+        $this->post(route('verification.store'), ['code' => RegistrationVerification::query()->sole()->code]);
 
         $user = User::query()->sole();
-        Notification::assertSentToTimes($user, VerifyEmail::class, 1);
+        $this->assertTrue($user->hasVerifiedEmail());
+        Notification::assertNotSentTo($user, VerifyEmail::class);
     }
 
     private function verificationUrl(User $user): string

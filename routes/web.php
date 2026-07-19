@@ -29,6 +29,9 @@ Route::middleware('guest')->group(function () {
         ->name('verification.create');
     Route::post('/verify', [VerificationController::class, 'store'])
         ->name('verification.store');
+    Route::post('/verify/resend', [VerificationController::class, 'resend'])
+        ->middleware('throttle:3,1')
+        ->name('verification.resend');
 
     Route::get('/login', [LoginController::class, 'create'])
         ->name('login');

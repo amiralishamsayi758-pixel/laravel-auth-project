@@ -7,14 +7,22 @@
     <title>@yield('title', 'هم‌مسیر')</title>
     <script>
         (() => {
+            const root = document.documentElement;
+            const storageKey = 'theme';
+            let savedTheme = null;
+
             try {
-                const stored = localStorage.getItem('theme');
-                const dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-                document.documentElement.classList.toggle('dark', dark);
-                document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+                const stored = localStorage.getItem(storageKey);
+                savedTheme = stored === 'light' || stored === 'dark' ? stored : null;
             } catch (error) {
-                document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
+                // Storage is optional; system preference remains available.
             }
+
+            const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+            const dark = savedTheme ? savedTheme === 'dark' : systemDark;
+
+            root.classList.toggle('dark', dark);
+            root.style.colorScheme = dark ? 'dark' : 'light';
         })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">

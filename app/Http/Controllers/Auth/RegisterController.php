@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Support\PasswordValidation;
 use App\Support\RegistrationValidation;
+use App\Support\RegistrationVerification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class RegisterController extends Controller
         return view('auth.register');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, RegistrationVerification $verification): RedirectResponse
     {
         $validated = $request->validate([
             ...RegistrationValidation::rules(),
@@ -35,6 +36,7 @@ class RegisterController extends Controller
             ...$validated,
             'password_hash' => $passwordHash,
         ]);
+        $verification->issue($validated['gmail']);
 
         return redirect()->route('verification.create');
     }

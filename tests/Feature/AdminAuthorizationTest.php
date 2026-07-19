@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\RegistrationVerification;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
@@ -69,7 +70,7 @@ class AdminAuthorizationTest extends TestCase
 
         $this->post(route('register.store'), $payload)
             ->assertSessionMissing('registration.role');
-        $this->post(route('verification.store'), ['code' => '123456']);
+        $this->post(route('verification.store'), ['code' => RegistrationVerification::query()->sole()->code]);
 
         $this->assertSame(UserRole::User, User::query()->sole()->role);
     }

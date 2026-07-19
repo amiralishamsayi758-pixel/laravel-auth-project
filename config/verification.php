@@ -1,14 +1,6 @@
 <?php
 
 return [
-    /*
-    |--------------------------------------------------------------------------
-    | Development Verification Code
-    |--------------------------------------------------------------------------
-    |
-    | This fixed code exists only for the local prototype flow. Replace this
-    | strategy before production or any real email / SMS verification work.
-    |
-    */
-    'development_code' => '123456',
+    'expires_after_seconds' => 600,
+    'resend_cooldown_seconds' => 90,
 ];

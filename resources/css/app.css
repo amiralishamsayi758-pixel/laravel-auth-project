@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
@@ -10,6 +12,26 @@
     --color-ink: #172033;
     --color-brand: #0f766e;
     --color-coral: #e76f51;
+}
+
+@layer base {
+    body,
+    main,
+    section,
+    article,
+    header,
+    footer,
+    nav,
+    form,
+    input,
+    button,
+    a,
+    svg {
+        transition-property:
+            background-color, color, border-color, box-shadow, fill, stroke;
+        transition-duration: 220ms;
+        transition-timing-function: ease;
+    }
 }
 
 @layer components {
@@ -64,7 +86,42 @@
     transform: rotate(0) scale(1);
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+    z-index: 1;
+}
+
+::view-transition-new(root) {
+    z-index: 2;
+}
+
+.theme-view-transition *,
+.theme-view-transition *::before,
+.theme-view-transition *::after {
+    transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
+    body,
+    main,
+    section,
+    article,
+    header,
+    footer,
+    nav,
+    form,
+    input,
+    button,
+    a,
+    svg {
+        transition-duration: 0ms;
+    }
+
     .theme-sun,
     .theme-moon {
         transition: none;
