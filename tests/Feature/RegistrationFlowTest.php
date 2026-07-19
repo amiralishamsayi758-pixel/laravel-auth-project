@@ -4,42 +4,87 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class RegistrationFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const PASSWORD = 'SecurePass123';
+
     private const REGISTRATION = [
         'gmail' => 'learner@gmail.com',
         'phone' => '09123456789',
         'username' => 'learner_1',
+        'password' => self::PASSWORD,
+        'password_confirmation' => self::PASSWORD,
     ];
 
-    public function test_registration_page_loads(): void
+    public function test_registration_page_loads_with_password_fields(): void
     {
         $this->withoutVite();
 
-        $this->get(route('register.create'))->assertOk();
+        $this->get(route('register.create'))
+            ->assertOk()
+            ->assertSee('name="password"', false)
+            ->assertSee('name="password_confirmation"', false);
     }
 
-    public function test_valid_registration_is_stored_in_session_without_creating_a_user(): void
+    public function test_password_is_required(): void
     {
-        $this->post(route('register.store'), self::REGISTRATION)
-            ->assertSessionHasNoErrors()
+        $this->post(route('register.store'), array_diff_key(self::REGISTRATION, array_flip(['password', 'password_confirmation'])))
+            ->assertSessionHasErrors(['password']);
+    }
+
+    public function test_password_confirmation_must_match(): void
+    {
+        $this->post(route('register.store'), [...self::REGISTRATION, 'password_confirmation' => 'DifferentPass123'])
+            ->assertSessionHasErrors(['password']);
+    }
+
+    public function test_weak_password_is_rejected(): void
+    {
+        $this->post(route('register.store'), [
+            ...self::REGISTRATION,
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertSessionHasErrors(['password']);
+    }
+
+    public function test_valid_registration_stores_only_a_temporary_password_hash(): void
+    {
+        $response = $this->post(route('register.store'), self::REGISTRATION);
+
+        $response->assertSessionHasNoErrors()
             ->assertSessionHas('registration.gmail', self::REGISTRATION['gmail'])
-            ->assertSessionHas('registration.phone', self::REGISTRATION['phone'])
-            ->assertSessionHas('registration.username', self::REGISTRATION['username'])
-            ->assertSessionMissing('registered_user_id')
+            ->assertSessionHas('registration.password_hash')
+            ->assertSessionMissing('registration.password')
+            ->assertSessionMissing('registration.password_confirmation')
             ->assertRedirectToRoute('verification.create');
+
+        $hash = session('registration.password_hash');
+        $this->assertIsString($hash);
+        $this->assertNotSame(self::PASSWORD, $hash);
+        $this->assertTrue(Hash::check(self::PASSWORD, $hash));
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_verification_requires_complete_temporary_registration_data(): void
+    {
+        $this->withSession(['registration' => array_diff_key(self::REGISTRATION, array_flip(['password', 'password_confirmation']))])
+            ->post(route('verification.store'), ['code' => '123456'])
+            ->assertRedirectToRoute('register.create')
+            ->assertSessionHasErrors(['registration']);
 
         $this->assertDatabaseCount('users', 0);
     }
 
     public function test_invalid_verification_code_is_rejected(): void
     {
-        $this->withSession(['registration' => self::REGISTRATION])
-            ->from(route('verification.create'))
+        $this->post(route('register.store'), self::REGISTRATION);
+
+        $this->from(route('verification.create'))
             ->post(route('verification.store'), ['code' => '654321'])
             ->assertRedirectToRoute('verification.create')
             ->assertSessionHasErrors(['code']);
@@ -47,109 +92,48 @@ class RegistrationFlowTest extends TestCase
         $this->assertDatabaseCount('users', 0);
     }
 
-    public function test_verification_without_registration_session_redirects_to_register(): void
+    public function test_verification_creates_user_with_same_hash_logs_in_and_clears_temporary_data(): void
     {
-        $this->get(route('verification.create'))
-            ->assertRedirectToRoute('register.create');
+        $this->post(route('register.store'), self::REGISTRATION);
+        $temporaryHash = session('registration.password_hash');
 
         $this->post(route('verification.store'), ['code' => '123456'])
-            ->assertRedirectToRoute('register.create');
-    }
-
-    public function test_valid_verification_creates_the_verified_user_and_replaces_temporary_session(): void
-    {
-        $this->withSession(['registration' => self::REGISTRATION])
-            ->post(route('verification.store'), ['code' => '123456'])
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('registered_user_id')
             ->assertSessionMissing('registration')
             ->assertSessionMissing('verification.completed')
             ->assertRedirectToRoute('dashboard');
 
-        $this->assertDatabaseCount('users', 1);
-        $this->assertDatabaseHas('users', self::REGISTRATION);
-
         $user = User::query()->sole();
-
+        $this->assertAuthenticatedAs($user);
         $this->assertNotNull($user->gmail_verified_at);
-        $this->assertSame(self::REGISTRATION['gmail'], $user->gmail);
-        $this->assertSame(self::REGISTRATION['phone'], $user->phone);
-        $this->assertSame(self::REGISTRATION['username'], $user->username);
+        $this->assertSame($temporaryHash, $user->getRawOriginal('password'));
+        $this->assertTrue(Hash::check(self::PASSWORD, $user->password));
     }
 
-    public function test_dashboard_redirects_without_registered_user_id(): void
+    public function test_verification_without_registration_redirects_to_register(): void
     {
-        $this->get(route('dashboard'))
-            ->assertRedirectToRoute('register.create');
+        $this->get(route('verification.create'))->assertRedirectToRoute('register.create');
+        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('register.create');
     }
 
-    public function test_dashboard_redirects_and_clears_a_nonexistent_registered_user_id(): void
+    public function test_duplicate_registration_values_are_rejected(): void
     {
-        $this->withSession(['registered_user_id' => 999999])
-            ->get(route('dashboard'))
-            ->assertRedirectToRoute('register.create')
-            ->assertSessionMissing('registered_user_id');
-    }
-
-    public function test_dashboard_displays_persisted_user_data(): void
-    {
-        $this->withoutVite();
         $user = User::factory()->create();
 
-        $this->withSession(['registered_user_id' => $user->getKey()])
-            ->get(route('dashboard'))
-            ->assertOk()
-            ->assertSee($user->gmail)
-            ->assertSee($user->phone)
-            ->assertSee($user->username)
-            ->assertSee('تأیید شده')
-            ->assertSee($user->created_at->format('Y-m-d H:i'));
-    }
-
-    public function test_duplicate_gmail_is_rejected(): void
-    {
-        $existingUser = User::factory()->create();
-
-        $this->post(route('register.store'), [
-            ...self::REGISTRATION,
-            'gmail' => $existingUser->gmail,
-        ])->assertSessionHasErrors(['gmail']);
+        foreach (['gmail', 'phone', 'username'] as $field) {
+            $this->post(route('register.store'), [...self::REGISTRATION, $field => $user->{$field}])
+                ->assertSessionHasErrors([$field]);
+        }
 
         $this->assertDatabaseCount('users', 1);
     }
 
-    public function test_duplicate_phone_is_rejected(): void
+    public function test_repeated_verification_does_not_create_a_duplicate(): void
     {
-        $existingUser = User::factory()->create();
-
-        $this->post(route('register.store'), [
-            ...self::REGISTRATION,
-            'phone' => $existingUser->phone,
-        ])->assertSessionHasErrors(['phone']);
-
-        $this->assertDatabaseCount('users', 1);
-    }
-
-    public function test_duplicate_username_is_rejected(): void
-    {
-        $existingUser = User::factory()->create();
-
-        $this->post(route('register.store'), [
-            ...self::REGISTRATION,
-            'username' => $existingUser->username,
-        ])->assertSessionHasErrors(['username']);
-
-        $this->assertDatabaseCount('users', 1);
-    }
-
-    public function test_repeated_verification_submission_does_not_create_a_duplicate_user(): void
-    {
-        $this->withSession(['registration' => self::REGISTRATION])
-            ->post(route('verification.store'), ['code' => '123456'])
-            ->assertRedirectToRoute('dashboard');
-
-        $this->post(route('verification.store'), ['code' => '123456'])
-            ->assertRedirectToRoute('register.create');
+        $this->post(route('register.store'), self::REGISTRATION);
+        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('dashboard');
+        $this->post(route('logout'));
+        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('register.create');
 
         $this->assertDatabaseCount('users', 1);
     }

@@ -38,6 +38,17 @@
                         <p id="username-help" class="field-help">نامی که در حساب شما نمایش داده می‌شود.</p>
                         @error('username')<p id="username-error" class="field-error" role="alert">{{ $message }}</p>@enderror
                     </div>
+                    <div>
+                        <label class="field-label" for="password">رمز عبور</label>
+                        <input @class(['field-input', 'is-invalid' => $errors->has('password')]) id="password" name="password" type="password" autocomplete="new-password" aria-describedby="password-help password-error" @if (! $errors->has('gmail') && ! $errors->has('phone') && ! $errors->has('username') && $errors->has('password')) autofocus @endif @error('password') aria-invalid="true" @enderror>
+                        <p id="password-help" class="field-help">حداقل ۸ نویسه، شامل حروف کوچک و بزرگ انگلیسی و عدد.</p>
+                        @error('password')<p id="password-error" class="field-error" role="alert">{{ $message }}</p>@enderror
+                    </div>
+                    <div>
+                        <label class="field-label" for="password_confirmation">تکرار رمز عبور</label>
+                        <input class="field-input" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" aria-describedby="password-confirmation-help">
+                        <p id="password-confirmation-help" class="field-help">رمز عبور را دوباره وارد کنید.</p>
+                    </div>
                     <button class="primary-button" type="submit">ادامه و دریافت کد تأیید</button>
                 </form>
             </div>

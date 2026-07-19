@@ -4,12 +4,15 @@ namespace Database\Factories;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * @extends Factory<User>
  */
 class UserFactory extends Factory
 {
+    protected static ?string $password;
+
     /**
      * Define the model's default state.
      *
@@ -22,6 +25,7 @@ class UserFactory extends Factory
             'phone' => fake()->unique()->numerify('09#########'),
             'username' => fake()->unique()->bothify('user_########'),
             'gmail_verified_at' => now(),
+            'password' => static::$password ??= Hash::make('Password123'),
             'remember_token' => null,
         ];
     }
