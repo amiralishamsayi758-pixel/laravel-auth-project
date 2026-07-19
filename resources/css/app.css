@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -6,29 +6,67 @@
 @source '../**/*.js';
 
 @theme {
-    --font-sans: 'Vazirmatn', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
     --color-ink: #172033;
     --color-brand: #0f766e;
     --color-coral: #e76f51;
 }
 
 @layer components {
-    .field-label { @apply mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300; }
-    .field-input { @apply block w-full rounded-md border border-white/80 bg-white/60 px-4 py-3 text-left text-sm font-medium text-ink outline-none backdrop-blur-lg transition duration-300 placeholder:text-slate-400 hover:border-teal-300/70 focus:border-teal-500/70 focus:bg-white/90 focus:ring-4 focus:ring-teal-500/10 dark:border-white/10 dark:bg-white/[.06] dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-300/70 dark:focus:ring-teal-400/10 sm:px-5 sm:py-3.5; direction: ltr; }
-    .field-input.is-invalid { @apply border-rose-500 bg-rose-50/75 focus:border-rose-600 focus:ring-rose-500/10 dark:border-rose-400/80 dark:bg-rose-500/[.09]; }
-    .field-help { @apply mt-1.5 min-h-5 text-xs text-slate-500 dark:text-slate-400; }
-    .field-error { @apply mt-1.5 text-xs font-medium text-rose-700 dark:text-rose-300; }
-    .code-input { @apply h-12 min-w-0 flex-1 rounded-md border border-white/80 bg-white/60 text-center text-xl font-bold text-ink outline-none backdrop-blur-lg transition duration-300 focus:border-teal-500/70 focus:bg-white/90 focus:ring-4 focus:ring-teal-500/10 dark:border-white/10 dark:bg-white/[.07] dark:text-slate-100 dark:focus:border-teal-300/70 sm:h-16 sm:max-w-14 sm:text-3xl; }
-    .code-input.is-invalid { @apply border-rose-500 bg-rose-50/75 focus:border-rose-600 focus:ring-rose-500/10 dark:border-rose-400/80 dark:bg-rose-500/[.09]; }
-    .primary-button { @apply flex w-full items-center justify-center rounded-md bg-[linear-gradient(135deg,#0f766e,#115e59)] px-5 py-4 text-base font-bold text-white shadow-[0_12px_28px_-14px_rgba(20,184,166,.55)] transition duration-300 hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-teal-500/20 active:translate-y-px; }
+    .field-label {
+        @apply mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300;
+    }
+    .field-input {
+        @apply block w-full rounded-md border border-white/80 bg-white/60 px-4 py-3 text-left text-sm font-medium text-ink outline-none backdrop-blur-lg transition duration-300 placeholder:text-slate-400 hover:border-teal-300/70 focus:border-teal-500/70 focus:bg-white/90 focus:text-ink focus:placeholder:text-slate-400 focus:ring-4 focus:ring-teal-500/10 dark:border-white/10 dark:bg-white/[.06] dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-300/70 dark:focus:bg-white/[.09] dark:focus:text-slate-100 dark:focus:placeholder:text-slate-500 dark:focus:ring-teal-400/10 sm:px-5 sm:py-3.5;
+        direction: ltr;
+    }
+    .field-input.is-invalid {
+        @apply border-rose-500 bg-rose-50/75 focus:border-rose-600 focus:ring-rose-500/10 dark:border-rose-400/80 dark:bg-rose-500/[.09];
+    }
+    .field-help {
+        @apply mt-1.5 min-h-5 text-xs text-slate-500 dark:text-slate-400;
+    }
+    .field-error {
+        @apply mt-1.5 text-xs font-medium text-rose-700 dark:text-rose-300;
+    }
+    .code-input {
+        @apply h-12 min-w-0 flex-1 rounded-md border border-white/80 bg-white/60 text-center text-xl font-bold text-ink outline-none backdrop-blur-lg transition duration-300 focus:border-teal-500/70 focus:bg-white/90 focus:text-ink focus:ring-4 focus:ring-teal-500/10 dark:border-white/10 dark:bg-white/[.07] dark:text-slate-100 dark:focus:border-teal-300/70 dark:focus:bg-white/[.09] dark:focus:text-slate-100 dark:focus:ring-teal-400/10 sm:h-16 sm:max-w-14 sm:text-3xl;
+    }
+    .code-input.is-invalid {
+        @apply border-rose-500 bg-rose-50/75 focus:border-rose-600 focus:ring-rose-500/10 dark:border-rose-400/80 dark:bg-rose-500/[.09];
+    }
+    .primary-button {
+        @apply flex w-full items-center justify-center rounded-md bg-[linear-gradient(135deg,#0f766e,#115e59)] px-5 py-4 text-base font-bold text-white shadow-[0_12px_28px_-14px_rgba(20,184,166,.55)] transition duration-300 hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-teal-500/20 active:translate-y-px;
+    }
 }
 
-.theme-sun, .theme-moon { transform-origin: center; transition: opacity 400ms ease, transform 400ms ease; }
-.theme-sun { opacity: 1; transform: rotate(0) scale(1); }
-.theme-moon { opacity: 0; transform: rotate(-70deg) scale(.55); }
-.dark .theme-sun { opacity: 0; transform: rotate(90deg) scale(.55); }
-.dark .theme-moon { opacity: 1; transform: rotate(0) scale(1); }
+.theme-sun,
+.theme-moon {
+    transform-origin: center;
+    transition:
+        opacity 400ms ease,
+        transform 400ms ease;
+}
+.theme-sun {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+}
+.theme-moon {
+    opacity: 0;
+    transform: rotate(-70deg) scale(0.55);
+}
+.dark .theme-sun {
+    opacity: 0;
+    transform: rotate(90deg) scale(0.55);
+}
+.dark .theme-moon {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+}
 
 @media (prefers-reduced-motion: reduce) {
-    .theme-sun, .theme-moon { transition: none; }
+    .theme-sun,
+    .theme-moon {
+        transition: none;
+    }
 }
