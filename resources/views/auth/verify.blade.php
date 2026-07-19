@@ -19,7 +19,7 @@
                         <legend class="sr-only">شش رقم کد تأیید</legend>
                         <div data-code-inputs class="flex w-full justify-center gap-1.5 sm:gap-3" dir="ltr">
                             @foreach (range(1, 6) as $digit)
-                                <input @class(['code-input', 'is-invalid' => $errors->has('code')]) type="text" maxlength="1" inputmode="numeric" autocomplete="{{ $digit === 1 ? 'one-time-code' : 'off' }}" aria-label="رقم {{ $digit }} کد تأیید" value="{{ substr((string) old('code'), $digit - 1, 1) }}" @error('code') aria-invalid="true" @enderror>
+                                <input @class(['code-input', 'is-invalid' => $errors->has('code')]) type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="{{ $digit === 1 ? 'one-time-code' : 'off' }}" aria-label="رقم {{ $digit }} کد تأیید" value="{{ substr((string) old('code'), $digit - 1, 1) }}" @if ($digit === 1) autofocus @endif @error('code') aria-invalid="true" @enderror>
                             @endforeach
                         </div>
                     </fieldset>

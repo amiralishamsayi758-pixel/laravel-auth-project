@@ -35,7 +35,21 @@ document.querySelectorAll('[data-code-inputs]').forEach((group) => {
         input.addEventListener('keydown', (event) => {
             if (event.key === 'Backspace' && !input.value && inputs[index - 1]) inputs[index - 1].focus();
         });
+
+        input.addEventListener('paste', (event) => {
+            const pastedCode = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, inputs.length);
+
+            if (! pastedCode) return;
+
+            event.preventDefault();
+            inputs.forEach((codeInput, codeIndex) => {
+                codeInput.value = pastedCode[codeIndex] ?? '';
+            });
+            synchronizeCode();
+            inputs[Math.min(pastedCode.length, inputs.length) - 1].focus();
+        });
     });
 
+    group.closest('form').addEventListener('submit', synchronizeCode);
     synchronizeCode();
 });
