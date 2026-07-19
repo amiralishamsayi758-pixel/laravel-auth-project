@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountDeletionController;
+use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
@@ -67,5 +68,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/profile/avatar', [AvatarController::class, 'store'])->name('profile.avatar.store');
         Route::delete('/profile/avatar', [AvatarController::class, 'destroy'])->name('profile.avatar.destroy');
         Route::delete('/profile', AccountDeletionController::class)->name('profile.destroy');
+
+        Route::prefix('admin')->name('admin.')->middleware('can:access-admin')->group(function () {
+            Route::get('/', AdminDashboardController::class)->name('dashboard');
+        });
     });
 });

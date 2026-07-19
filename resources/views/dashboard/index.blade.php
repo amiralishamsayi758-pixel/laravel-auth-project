@@ -21,6 +21,9 @@
                     <div class="rounded-md border border-slate-200/70 bg-white/40 p-4 dark:border-white/10 dark:bg-white/[.04]"><dt class="text-xs text-slate-500 dark:text-slate-400">وضعیت جیمیل</dt><dd class="mt-2 font-bold">{{ $user->gmail_verified_at ? 'تأیید شده' : 'تأیید نشده' }}</dd></div>
                     <div class="rounded-md border border-slate-200/70 bg-white/40 p-4 dark:border-white/10 dark:bg-white/[.04]"><dt class="text-xs text-slate-500 dark:text-slate-400">زمان ایجاد حساب</dt><dd class="mt-2 font-bold" dir="ltr">{{ $user->created_at?->format('Y-m-d H:i') ?? 'نامشخص' }}</dd></div>
                 </dl>
+                @can('access-admin')
+                    <a href="{{ route('admin.dashboard') }}" class="mt-7 flex w-full items-center justify-center rounded-md border border-amber-500/30 bg-amber-50/70 px-5 py-3.5 font-bold text-amber-800 transition hover:bg-amber-100 dark:border-amber-300/20 dark:bg-amber-500/[.08] dark:text-amber-200 dark:hover:bg-amber-500/[.14]">ناحیه مدیریت</a>
+                @endcan
                 <a href="{{ route('profile.edit') }}" class="mt-7 flex w-full items-center justify-center rounded-md border border-teal-600/25 bg-teal-50/60 px-5 py-3.5 font-bold text-brand transition hover:bg-teal-100 dark:border-teal-300/20 dark:bg-teal-500/[.07] dark:text-teal-200 dark:hover:bg-teal-500/[.12]">مدیریت پروفایل</a>
                 <form action="{{ route('logout') }}" method="post" class="mt-7">
                     @csrf
