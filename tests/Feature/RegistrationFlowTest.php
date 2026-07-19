@@ -92,7 +92,7 @@ class RegistrationFlowTest extends TestCase
         $this->assertDatabaseCount('users', 0);
     }
 
-    public function test_verification_creates_user_with_same_hash_logs_in_and_clears_temporary_data(): void
+    public function test_verification_creates_unverified_user_with_same_hash_logs_in_and_clears_temporary_data(): void
     {
         $this->post(route('register.store'), self::REGISTRATION);
         $temporaryHash = session('registration.password_hash');
@@ -101,11 +101,11 @@ class RegistrationFlowTest extends TestCase
             ->assertSessionHasNoErrors()
             ->assertSessionMissing('registration')
             ->assertSessionMissing('verification.completed')
-            ->assertRedirectToRoute('dashboard');
+            ->assertRedirectToRoute('verification.notice');
 
         $user = User::query()->sole();
         $this->assertAuthenticatedAs($user);
-        $this->assertNotNull($user->gmail_verified_at);
+        $this->assertNull($user->gmail_verified_at);
         $this->assertSame($temporaryHash, $user->getRawOriginal('password'));
         $this->assertTrue(Hash::check(self::PASSWORD, $user->password));
     }
@@ -131,7 +131,7 @@ class RegistrationFlowTest extends TestCase
     public function test_repeated_verification_does_not_create_a_duplicate(): void
     {
         $this->post(route('register.store'), self::REGISTRATION);
-        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('dashboard');
+        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('verification.notice');
         $this->post(route('logout'));
         $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('register.create');
 

@@ -10,6 +10,9 @@
         <div class="w-full max-w-lg">
             <x-brand-logo class="mb-8 lg:hidden" />
             <div class="w-full rounded-lg border border-white/75 bg-white/70 p-6 shadow-[0_22px_60px_-28px_rgba(15,23,42,.35)] backdrop-blur-xl dark:border-white/[.08] dark:bg-[#111b20]/85 sm:p-9 lg:p-10">
+                @if (session('status') === 'email-verified')
+                    <div class="mb-5 rounded-md border border-teal-500/25 bg-teal-50/80 px-4 py-3 text-sm leading-7 text-teal-800 dark:border-teal-400/20 dark:bg-teal-500/[.08] dark:text-teal-200" role="status">جیمیل شما با موفقیت تأیید شد.</div>
+                @endif
                 <header><p class="mb-2 text-sm font-semibold text-brand dark:text-teal-300">ناحیه کاربری</p><h1 class="text-2xl font-extrabold sm:text-3xl">خوش آمدید، {{ $user->username }}</h1><p class="mt-3 text-sm leading-7 text-slate-500 dark:text-slate-400">اطلاعات این حساب از پایگاه داده خوانده شده است.</p></header>
                 <dl class="mt-7 grid gap-4">
                     <div class="rounded-md border border-teal-500/15 bg-teal-50/55 p-4 dark:border-teal-300/10 dark:bg-teal-300/[.05]"><dt class="text-xs text-slate-500 dark:text-slate-400">Gmail</dt><dd class="mt-2 break-all font-bold text-brand dark:text-teal-300">{{ $user->gmail }}</dd></div>

@@ -19,7 +19,6 @@ class UserTest extends TestCase
             'gmail',
             'phone',
             'username',
-            'gmail_verified_at',
             'password',
         ], $user->getFillable());
     }

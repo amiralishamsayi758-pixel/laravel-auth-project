@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\RegistrationValidation;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
@@ -79,7 +80,6 @@ class VerificationController extends Controller
             $user = DB::transaction(function () use ($passwordHash, $validatedRegistration): User {
                 return User::create([
                     ...$validatedRegistration,
-                    'gmail_verified_at' => now(),
                     'password' => $passwordHash,
                 ]);
             });
@@ -92,10 +92,11 @@ class VerificationController extends Controller
                 ->withInput($validatedRegistration);
         }
 
+        event(new Registered($user));
         Auth::login($user);
         $request->session()->regenerate();
         $request->session()->forget(['registration', 'verification.completed']);
 
-        return redirect()->route('dashboard');
+        return redirect()->route('verification.notice');
     }
 }
