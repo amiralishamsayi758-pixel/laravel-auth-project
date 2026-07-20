@@ -13,6 +13,10 @@ use Illuminate\Notifications\Notification;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_VERIFIED = 'verified';
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, MustVerifyEmailTrait, Notifiable;
 
@@ -26,6 +30,13 @@ class User extends Authenticatable implements MustVerifyEmail
         'phone',
         'username',
         'password',
+        'status',
+        'registration_attempt_id',
+        'verification_code',
+        'verification_attempts',
+        'verification_expires_at',
+        'resend_available_at',
+        'verification_used_at',
     ];
 
     /**
@@ -36,6 +47,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
+        'verification_code',
     ];
 
     /**
@@ -47,6 +59,10 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'gmail_verified_at' => 'datetime',
+            'verification_expires_at' => 'datetime',
+            'resend_available_at' => 'datetime',
+            'verification_used_at' => 'datetime',
+            'verification_attempts' => 'integer',
             'password' => 'hashed',
             'role' => UserRole::class,
         ];

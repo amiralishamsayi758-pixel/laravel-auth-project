@@ -20,6 +20,13 @@ class UserTest extends TestCase
             'phone',
             'username',
             'password',
+            'status',
+            'registration_attempt_id',
+            'verification_code',
+            'verification_attempts',
+            'verification_expires_at',
+            'resend_available_at',
+            'verification_used_at',
         ], $user->getFillable());
     }
 
@@ -29,6 +36,7 @@ class UserTest extends TestCase
 
         $this->assertContains('password', $user->getHidden());
         $this->assertContains('remember_token', $user->getHidden());
+        $this->assertContains('verification_code', $user->getHidden());
     }
 
     public function test_gmail_verified_at_uses_a_datetime_cast(): void

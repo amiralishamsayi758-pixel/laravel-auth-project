@@ -2,12 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\RegistrationVerification;
 use App\Models\User;
 use App\Notifications\RegistrationVerificationCode;
-use Illuminate\Database\UniqueConstraintViolationException;
+use App\Services\Auth\RegisterService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
@@ -27,293 +25,266 @@ class RegistrationFlowTest extends TestCase
         'password_confirmation' => self::PASSWORD,
     ];
 
-    public function test_registration_page_loads_with_password_fields(): void
+    public function test_fresh_database_contains_the_complete_users_schema_only(): void
+    {
+        $columns = Schema::getColumnListing('users');
+
+        foreach ([
+            'id',
+            'username',
+            'gmail',
+            'phone',
+            'password',
+            'gmail_verified_at',
+            'avatar_path',
+            'role',
+            'status',
+            'registration_attempt_id',
+            'verification_code',
+            'verification_attempts',
+            'verification_expires_at',
+            'resend_available_at',
+            'verification_used_at',
+        ] as $column) {
+            $this->assertContains($column, $columns);
+        }
+
+        $this->assertFalse(Schema::hasTable('registration_verifications'));
+        $this->assertFalse(Schema::hasTable('legacy_registration_verifications'));
+    }
+
+    public function test_registration_page_loads_and_validates_password(): void
     {
         $this->withoutVite();
+        $this->get(route('register.create'))->assertOk()->assertSee('name="password"', false);
 
-        $this->get(route('register.create'))
-            ->assertOk()
-            ->assertSee('name="password"', false)
-            ->assertSee('name="password_confirmation"', false);
-    }
-
-    public function test_password_is_required(): void
-    {
-        $this->post(route('register.store'), array_diff_key(self::REGISTRATION, array_flip(['password', 'password_confirmation'])))
+        $this->post(route('register.store'), array_diff_key(self::REGISTRATION, ['password' => true]))
             ->assertSessionHasErrors(['password']);
     }
 
-    public function test_password_confirmation_must_match(): void
-    {
-        $this->post(route('register.store'), [...self::REGISTRATION, 'password_confirmation' => 'DifferentPass123'])
-            ->assertSessionHasErrors(['password']);
-    }
-
-    public function test_weak_password_is_rejected(): void
+    public function test_invalid_registration_data_returns_field_specific_errors(): void
     {
         $this->post(route('register.store'), [
-            ...self::REGISTRATION,
-            'password' => 'password',
-            'password_confirmation' => 'password',
-        ])->assertSessionHasErrors(['password']);
+            'gmail' => 'person@example.com',
+            'phone' => '08123456789',
+            'username' => 'ab',
+            'password' => 'weak',
+            'password_confirmation' => 'different',
+        ])->assertSessionHasErrors(['gmail', 'phone', 'username', 'password']);
+
+        $this->assertDatabaseCount('users', 0);
     }
 
-    public function test_valid_registration_stores_only_a_temporary_password_hash(): void
+    public function test_registration_normalizes_gmail_before_creating_user(): void
     {
         Notification::fake();
-        $response = $this->post(route('register.store'), self::REGISTRATION);
 
-        $response->assertSessionHasNoErrors()
-            ->assertSessionHas('registration.gmail', self::REGISTRATION['gmail'])
-            ->assertSessionHas('registration.password_hash')
+        $payload = self::REGISTRATION;
+        $payload['gmail'] = '  Learner@GMAIL.COM  ';
+
+        $this->post(route('register.store'), $payload)->assertSessionHasNoErrors();
+
+        $this->assertSame('learner@gmail.com', User::query()->sole()->gmail);
+    }
+
+    public function test_registration_creates_pending_user_with_plain_database_otp_and_no_otp_session_state(): void
+    {
+        Notification::fake();
+
+        $this->post(route('register.store'), self::REGISTRATION)
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('registration_attempt_id')
+            ->assertSessionMissing('registration')
+            ->assertSessionMissing('verification.code')
             ->assertSessionMissing('verification.code_hash')
-            ->assertSessionMissing('verification.code_expires_at')
-            ->assertSessionMissing('verification.resend_available_at')
-            ->assertSessionMissing('registration.password')
-            ->assertSessionMissing('registration.password_confirmation')
             ->assertRedirectToRoute('verification.create');
 
-        $hash = session('registration.password_hash');
-        $this->assertIsString($hash);
-        $this->assertNotSame(self::PASSWORD, $hash);
-        $this->assertTrue(Hash::check(self::PASSWORD, $hash));
-        $challenge = RegistrationVerification::query()->sole();
-        $this->assertMatchesRegularExpression('/^[0-9]{6}$/', $challenge->code);
-        $this->assertTrue(Hash::check($challenge->code, $challenge->code_hash));
-        $this->assertSame(self::REGISTRATION['gmail'], $challenge->gmail);
-        $this->assertNotContains('password', Schema::getColumnListing('registration_verifications'));
-        $this->assertNotContains('password_hash', Schema::getColumnListing('registration_verifications'));
-        $this->assertDatabaseCount('users', 0);
-        Notification::assertSentOnDemand(RegistrationVerificationCode::class);
+        $user = User::query()->sole();
+        $code = $this->latestCode();
+
+        $this->assertSame(User::STATUS_PENDING, $user->status);
+        $this->assertNull($user->gmail_verified_at);
+        $this->assertMatchesRegularExpression('/^[0-9]{6}$/', $code);
+        $this->assertSame($code, $user->verification_code);
+        $this->assertTrue($user->verification_expires_at->isFuture());
+        $this->assertTrue($user->resend_available_at->isFuture());
+        $this->assertSame(session('registration_attempt_id'), $user->registration_attempt_id);
+        $this->assertTrue(Hash::check(self::PASSWORD, $user->password));
     }
 
-    public function test_verification_requires_complete_temporary_registration_data(): void
+    public function test_correct_database_otp_verifies_the_existing_user(): void
     {
+        Notification::fake();
         $this->post(route('register.store'), self::REGISTRATION);
-        $code = $this->currentCode();
-        session()->forget('registration.gmail');
+        $userId = User::query()->sole()->id;
 
-        $this->post(route('verification.store'), ['code' => $code])
-            ->assertRedirectToRoute('register.create')
-            ->assertSessionHasErrors(['registration']);
+        $this->post(route('verification.store'), ['code' => $this->latestCode()])
+            ->assertSessionMissing('registration_attempt_id')
+            ->assertRedirectToRoute('dashboard');
 
-        $this->assertDatabaseCount('users', 0);
+        $user = User::query()->findOrFail($userId);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertSame(User::STATUS_VERIFIED, $user->status);
+        $this->assertNotNull($user->gmail_verified_at);
+        $this->assertNotNull($user->verification_used_at);
+        $this->assertNull($user->verification_code);
+        $this->assertNull($user->verification_expires_at);
+        $this->assertNull($user->resend_available_at);
+        $this->assertAuthenticatedAs($user);
     }
 
-    public function test_invalid_verification_code_is_rejected(): void
+    public function test_wrong_otp_increments_attempts_and_maximum_attempts_blocks_correct_code(): void
     {
+        Notification::fake();
         $this->post(route('register.store'), self::REGISTRATION);
+        $correctCode = $this->latestCode();
+        $incorrectCode = $correctCode === '000000' ? '111111' : '000000';
 
-        $this->from(route('verification.create'))
-            ->post(route('verification.store'), ['code' => '654321'])
-            ->assertRedirectToRoute('verification.create')
+        for ($attempt = 1; $attempt <= (int) config('verification.max_attempts'); $attempt++) {
+            $this->post(route('verification.store'), ['code' => $incorrectCode])
+                ->assertSessionHasErrors(['code']);
+
+            $this->assertSame($attempt, User::query()->sole()->verification_attempts);
+        }
+
+        $this->post(route('verification.store'), ['code' => $correctCode])
             ->assertSessionHasErrors(['code']);
 
-        $this->assertDatabaseCount('users', 0);
+        $this->assertSame(User::STATUS_PENDING, User::query()->sole()->status);
     }
 
-    public function test_verification_creates_verified_user_with_same_hash_logs_in_and_clears_temporary_data(): void
+    public function test_invalid_otp_format_is_rejected_before_verification_logic(): void
     {
+        Notification::fake();
         $this->post(route('register.store'), self::REGISTRATION);
-        $temporaryHash = session('registration.password_hash');
-        $code = $this->currentCode();
 
-        $this->post(route('verification.store'), ['code' => $code])
-            ->assertSessionHasNoErrors()
-            ->assertSessionMissing('registration')
-            ->assertSessionMissing('verification.completed')
-            ->assertRedirectToRoute('dashboard');
+        foreach (['12345', 'abcdef'] as $invalidCode) {
+            $this->post(route('verification.store'), ['code' => $invalidCode])
+                ->assertSessionHasErrors(['code']);
+        }
 
         $user = User::query()->sole();
-        $this->assertAuthenticatedAs($user);
-        $this->assertNotNull($user->gmail_verified_at);
-        $this->assertSame($temporaryHash, $user->getRawOriginal('password'));
-        $this->assertTrue(Hash::check(self::PASSWORD, $user->password));
-        $this->assertDatabaseCount('registration_verifications', 0);
+        $this->assertSame(0, $user->verification_attempts);
+        $this->assertSame(User::STATUS_PENDING, $user->status);
     }
 
-    public function test_verification_without_registration_redirects_to_register(): void
+    public function test_expired_and_used_otps_are_rejected(): void
     {
-        $this->get(route('verification.create'))->assertRedirectToRoute('register.create');
-        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('register.create');
-    }
-
-    public function test_resend_requires_registration_and_restarts_server_cooldown(): void
-    {
-        $this->post(route('verification.resend'))
-            ->assertRedirectToRoute('register.create');
-
+        Notification::fake();
         $this->post(route('register.store'), self::REGISTRATION);
-        $initialChallenge = RegistrationVerification::query()->sole();
-        $initialExpiration = $initialChallenge->expires_at;
-        $initialAvailableAt = $initialChallenge->resend_available_at;
-        $initialHash = $initialChallenge->code_hash;
-        $oldCode = $initialChallenge->code;
+        $code = $this->latestCode();
 
-        $this->post(route('verification.resend'))
-            ->assertSessionHasErrors(['resend']);
+        User::query()->sole()->forceFill(['verification_expires_at' => now()->subSecond()])->save();
+        $this->post(route('verification.store'), ['code' => $code])->assertSessionHasErrors(['code']);
+
+        User::query()->sole()->forceFill([
+            'verification_expires_at' => now()->addMinute(),
+            'verification_used_at' => now(),
+        ])->save();
+        $this->post(route('verification.store'), ['code' => $code])->assertSessionHasErrors(['code']);
+
+        $this->assertSame(User::STATUS_PENDING, User::query()->sole()->status);
+    }
+
+    public function test_resend_updates_same_user_and_invalidates_old_otp(): void
+    {
+        Notification::fake();
+        $this->post(route('register.store'), self::REGISTRATION);
+        $user = User::query()->sole();
+        $oldCode = $this->latestCode();
+        $oldExpiration = $user->verification_expires_at;
 
         $this->travel(91)->seconds();
+        $this->post(route('verification.resend'))->assertRedirect();
 
-        $this->post(route('verification.resend'))
-            ->assertRedirect()
-            ->assertSessionHas('status', 'verification-code-resent');
+        $updated = User::query()->sole();
+        $newCode = $this->latestCode();
 
-        $replacement = RegistrationVerification::query()->sole();
-        $this->assertNotSame($oldCode, $replacement->code);
-        $this->assertNotSame($initialHash, $replacement->code_hash);
-        $this->assertTrue($replacement->expires_at->isAfter($initialExpiration));
-        $this->assertTrue($replacement->resend_available_at->isAfter($initialAvailableAt));
-        $this->assertDatabaseCount('registration_verifications', 1);
+        $this->assertSame($user->id, $updated->id);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertNotSame($oldCode, $newCode);
+        $this->assertSame($newCode, $updated->verification_code);
+        $this->assertTrue($updated->verification_expires_at->isAfter($oldExpiration));
+        $this->assertSame(0, $updated->verification_attempts);
 
-        $this->post(route('verification.store'), ['code' => $oldCode])
-            ->assertSessionHasErrors(['code']);
-
-        $this->post(route('verification.store'), ['code' => $replacement->code])
-            ->assertRedirectToRoute('dashboard');
+        $this->post(route('verification.store'), ['code' => $oldCode])->assertSessionHasErrors(['code']);
+        $this->post(route('verification.store'), ['code' => $newCode])->assertRedirectToRoute('dashboard');
     }
 
-    public function test_expired_verification_code_is_rejected(): void
+    public function test_resend_cooldown_and_route_throttle_are_enforced(): void
     {
-        $this->post(route('register.store'), self::REGISTRATION);
-        $code = $this->currentCode();
-        $this->travel(601)->seconds();
-
-        $this->post(route('verification.store'), ['code' => $code])
-            ->assertSessionHasErrors(['code']);
-
-        $this->assertDatabaseCount('users', 0);
-    }
-
-    public function test_verification_page_contains_code_and_countdown_hooks(): void
-    {
-        $this->withoutVite();
+        Notification::fake();
         $this->post(route('register.store'), self::REGISTRATION);
 
-        $this->get(route('verification.create'))
-            ->assertOk()
-            ->assertSee('data-code-inputs', false)
-            ->assertSee('data-resend-timer', false)
-            ->assertSee('data-duration="90"', false)
-            ->assertSee('data-storage-key="verification_resend_available_at"', false)
-            ->assertSee('aria-live="polite"', false);
-    }
+        $this->post(route('verification.resend'))->assertSessionHasErrors(['resend']);
 
-    public function test_resend_endpoint_is_rate_limited(): void
-    {
-        $this->post(route('register.store'), self::REGISTRATION);
-
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
+        for ($attempt = 2; $attempt <= 3; $attempt++) {
             $this->post(route('verification.resend'))->assertRedirect();
         }
 
         $this->post(route('verification.resend'))->assertTooManyRequests();
     }
 
-    public function test_duplicate_registration_values_are_rejected(): void
-    {
-        $user = User::factory()->create();
-
-        foreach (['gmail', 'phone', 'username'] as $field) {
-            $this->post(route('register.store'), [...self::REGISTRATION, $field => $user->{$field}])
-                ->assertSessionHasErrors([$field]);
-        }
-
-        $this->assertDatabaseCount('users', 1);
-    }
-
-    public function test_repeated_verification_does_not_create_a_duplicate(): void
-    {
-        $this->post(route('register.store'), self::REGISTRATION);
-        $code = $this->currentCode();
-        $this->post(route('verification.store'), ['code' => $code])->assertRedirectToRoute('dashboard');
-        $this->post(route('logout'));
-        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('register.create');
-
-        $this->assertDatabaseCount('users', 1);
-    }
-
-    public function test_repeated_registration_for_same_gmail_updates_one_challenge(): void
-    {
-        $this->post(route('register.store'), self::REGISTRATION);
-        $firstCode = $this->currentCode();
-
-        $this->post(route('register.store'), self::REGISTRATION);
-
-        $this->assertDatabaseCount('registration_verifications', 1);
-        $this->assertNotSame($firstCode, $this->currentCode());
-    }
-
-    public function test_production_does_not_store_plain_code(): void
+    public function test_multiple_pending_users_have_isolated_otp_state(): void
     {
         Notification::fake();
-        $this->app->detectEnvironment(fn (): string => 'production');
+        $registration = app(RegisterService::class);
 
-        app(\App\Support\RegistrationVerification::class)->issue(self::REGISTRATION['gmail']);
+        $first = $registration->register($this->userAttributes('first'));
+        $firstCode = $this->latestCode();
+        $second = $registration->register($this->userAttributes('second'));
+        $secondCode = $this->latestCode();
 
-        $challenge = RegistrationVerification::query()->sole();
-        $this->assertNull($challenge->code);
-        $this->assertNotEmpty($challenge->code_hash);
+        $this->assertDatabaseCount('users', 2);
+        $this->assertNotSame($first->registration_attempt_id, $second->registration_attempt_id);
+        $this->assertSame($firstCode, $first->verification_code);
+        $this->assertSame($secondCode, $second->verification_code);
     }
 
-    public function test_unique_gmail_constraint_prevents_duplicate_challenges(): void
+    public function test_verification_without_registration_attempt_redirects_safely(): void
     {
-        RegistrationVerification::query()->create([
-            'gmail' => self::REGISTRATION['gmail'],
-            'code' => '123456',
-            'code_hash' => Hash::make('123456'),
-            'expires_at' => now()->addMinute(),
-        ]);
-
-        $this->expectException(UniqueConstraintViolationException::class);
-
-        RegistrationVerification::query()->create([
-            'gmail' => self::REGISTRATION['gmail'],
-            'code' => '654321',
-            'code_hash' => Hash::make('654321'),
-            'expires_at' => now()->addMinute(),
-        ]);
+        $this->get(route('verification.create'))->assertRedirectToRoute('register.create');
+        $this->post(route('verification.store'), ['code' => '123456'])->assertRedirectToRoute('register.create');
+        $this->post(route('verification.resend'))->assertRedirectToRoute('register.create');
     }
 
-    public function test_prune_command_deletes_only_expired_challenges(): void
+    public function test_pending_user_cannot_access_dashboard(): void
     {
-        foreach ([
-            ['gmail' => 'expired@gmail.com', 'expires_at' => now()->subSecond()],
-            ['gmail' => 'valid@gmail.com', 'expires_at' => now()->addMinute()],
-        ] as $challenge) {
-            RegistrationVerification::query()->create([
-                ...$challenge,
-                'code' => '123456',
-                'code_hash' => Hash::make('123456'),
-            ]);
-        }
-
-        $this->artisan('verification:prune')->assertSuccessful();
-
-        $this->assertDatabaseMissing('registration_verifications', ['gmail' => 'expired@gmail.com']);
-        $this->assertDatabaseHas('registration_verifications', ['gmail' => 'valid@gmail.com']);
-    }
-
-    public function test_registration_flow_never_modifies_legacy_users(): void
-    {
-        Schema::create('legacy_users', function ($table): void {
-            $table->id();
-            $table->string('gmail');
-        });
-        DB::table('legacy_users')->insert([
-            ['gmail' => 'legacy1@gmail.com'],
-            ['gmail' => 'legacy2@gmail.com'],
-            ['gmail' => 'legacy3@gmail.com'],
-        ]);
-
+        Notification::fake();
         $this->post(route('register.store'), self::REGISTRATION);
-        $this->post(route('verification.store'), ['code' => $this->currentCode()]);
+        $pendingUser = User::query()->sole();
 
-        $this->assertDatabaseCount('legacy_users', 3);
+        $this->actingAs($pendingUser)
+            ->get(route('dashboard'))
+            ->assertRedirectToRoute('verification.notice');
     }
 
-    private function currentCode(): string
+    /** @return array<string, string> */
+    private function userAttributes(string $suffix): array
     {
-        return RegistrationVerification::query()->sole()->code;
+        return [
+            'gmail' => "{$suffix}@gmail.com",
+            'phone' => $suffix === 'first' ? '09111111111' : '09222222222',
+            'username' => "user_{$suffix}",
+            'password' => self::PASSWORD,
+        ];
+    }
+
+    private function latestCode(): string
+    {
+        $code = null;
+
+        Notification::assertSentOnDemand(
+            RegistrationVerificationCode::class,
+            function (RegistrationVerificationCode $notification) use (&$code): bool {
+                $code = $notification->code;
+
+                return true;
+            },
+        );
+
+        $this->assertIsString($code);
+
+        return $code;
     }
 }

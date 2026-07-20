@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\RegistrationVerification;
 use App\Models\User;
 use App\Notifications\RegistrationVerificationCode;
 use Illuminate\Auth\Events\Registered;
@@ -160,9 +159,10 @@ class EmailVerificationTest extends TestCase
     public function test_registration_dispatches_registered_event(): void
     {
         Event::fake([Registered::class]);
+        Notification::fake();
 
         $this->post(route('register.store'), $this->registrationPayload());
-        $this->post(route('verification.store'), ['code' => RegistrationVerification::query()->sole()->code])
+        $this->post(route('verification.store'), ['code' => $this->latestRegistrationCode()])
             ->assertRedirectToRoute('dashboard');
 
         $user = User::query()->sole();
@@ -175,7 +175,7 @@ class EmailVerificationTest extends TestCase
 
         $this->post(route('register.store'), $this->registrationPayload());
         Notification::assertSentOnDemand(RegistrationVerificationCode::class);
-        $this->post(route('verification.store'), ['code' => RegistrationVerification::query()->sole()->code]);
+        $this->post(route('verification.store'), ['code' => $this->latestRegistrationCode()]);
 
         $user = User::query()->sole();
         $this->assertTrue($user->hasVerifiedEmail());
@@ -188,6 +188,22 @@ class EmailVerificationTest extends TestCase
             'id' => $user->getKey(),
             'hash' => sha1($user->getEmailForVerification()),
         ]);
+    }
+
+    private function latestRegistrationCode(): string
+    {
+        $code = null;
+
+        Notification::assertSentOnDemand(
+            RegistrationVerificationCode::class,
+            function (RegistrationVerificationCode $notification) use (&$code): bool {
+                $code = $notification->code;
+
+                return true;
+            },
+        );
+
+        return (string) $code;
     }
 
     /**

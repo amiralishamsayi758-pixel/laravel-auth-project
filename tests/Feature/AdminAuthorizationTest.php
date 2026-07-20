@@ -3,10 +3,11 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
-use App\Models\RegistrationVerification;
 use App\Models\User;
+use App\Notifications\RegistrationVerificationCode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AdminAuthorizationTest extends TestCase
@@ -59,6 +60,7 @@ class AdminAuthorizationTest extends TestCase
 
     public function test_registration_input_cannot_set_role_or_store_it_temporarily(): void
     {
+        Notification::fake();
         $payload = [
             'gmail' => 'role-test@gmail.com',
             'phone' => '09123456789',
@@ -70,9 +72,25 @@ class AdminAuthorizationTest extends TestCase
 
         $this->post(route('register.store'), $payload)
             ->assertSessionMissing('registration.role');
-        $this->post(route('verification.store'), ['code' => RegistrationVerification::query()->sole()->code]);
+        $this->post(route('verification.store'), ['code' => $this->latestRegistrationCode()]);
 
         $this->assertSame(UserRole::User, User::query()->sole()->role);
+    }
+
+    private function latestRegistrationCode(): string
+    {
+        $code = null;
+
+        Notification::assertSentOnDemand(
+            RegistrationVerificationCode::class,
+            function (RegistrationVerificationCode $notification) use (&$code): bool {
+                $code = $notification->code;
+
+                return true;
+            },
+        );
+
+        return (string) $code;
     }
 
     public function test_profile_avatar_and_password_payloads_cannot_change_role(): void

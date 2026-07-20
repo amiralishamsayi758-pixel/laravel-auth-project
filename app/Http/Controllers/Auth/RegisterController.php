@@ -3,40 +3,25 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Support\PasswordValidation;
-use App\Support\RegistrationValidation;
-use App\Support\RegistrationVerification;
+use App\Http\Requests\RegisterRequest;
+use App\Services\Auth\RegisterService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 
 class RegisterController extends Controller
 {
+    public function __construct(private RegisterService $registerService) {}
+
     public function create(): View
     {
         return view('auth.register');
     }
 
-    public function store(Request $request, RegistrationVerification $verification): RedirectResponse
+    public function store(RegisterRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            ...RegistrationValidation::rules(),
-            'password' => PasswordValidation::rules(),
-        ], [
-            ...RegistrationValidation::messages(),
-            ...PasswordValidation::messages(),
-        ]);
+        $user = $this->registerService->register($request->validated());
 
-        $passwordHash = Hash::make($validated['password']);
-        unset($validated['password']);
-
-        $request->session()->forget('verification.completed');
-        $request->session()->put('registration', [
-            ...$validated,
-            'password_hash' => $passwordHash,
-        ]);
-        $verification->issue($validated['gmail']);
+        $request->session()->put('registration_attempt_id', $user->registration_attempt_id);
 
         return redirect()->route('verification.create');
     }

@@ -25,6 +25,16 @@ class AuthenticationTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_invalid_login_data_returns_validation_errors(): void
+    {
+        $this->post(route('login.store'), [
+            'login' => '',
+            'password' => '',
+        ])->assertSessionHasErrors(['login', 'password']);
+
+        $this->assertGuest();
+    }
+
     public function test_username_login_succeeds_and_honors_intended_destination(): void
     {
         $user = User::factory()->create(['password' => 'SecurePass123']);

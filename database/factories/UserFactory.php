@@ -29,6 +29,7 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('Password123'),
             'remember_token' => null,
             'role' => UserRole::User,
+            'status' => User::STATUS_VERIFIED,
         ];
     }
 
@@ -39,6 +40,7 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'gmail_verified_at' => null,
+            'status' => User::STATUS_PENDING,
         ]);
     }
 

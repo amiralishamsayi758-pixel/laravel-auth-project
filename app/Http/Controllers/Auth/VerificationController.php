@@ -3,143 +3,68 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\RegistrationVerification as RegistrationVerificationModel;
-use App\Models\User;
-use App\Support\RegistrationValidation;
-use App\Support\RegistrationVerification;
-use Illuminate\Auth\Events\Registered;
+use App\Http\Requests\ResendOtpRequest;
+use App\Http\Requests\VerifyOtpRequest;
+use App\Services\Auth\OtpResendService;
+use App\Services\Auth\VerificationService;
 use Illuminate\Contracts\View\View;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
 
 class VerificationController extends Controller
 {
-    public function create(Request $request, RegistrationVerification $verification): View|RedirectResponse
-    {
-        $gmail = $this->pendingGmail($request);
+    public function __construct(
+        private VerificationService $verificationService,
+        private OtpResendService $otpResendService,
+    ) {}
 
-        if ($gmail === null) {
+    public function create(Request $request): View|RedirectResponse
+    {
+        $user = $this->verificationService->findPendingUser(
+            $request->session()->get('registration_attempt_id'),
+        );
+
+        if (! $user) {
             return redirect()->route('register.create')->withErrors([
-                'registration' => 'اطلاعات ثبت‌نام موجود نیست. لطفاً دوباره ثبت‌نام کنید.',
+                'registration' => 'درخواست ثبت‌نام فعالی وجود ندارد.',
             ]);
         }
 
-        $challenge = $verification->find($gmail);
-
         return view('auth.verify', [
-            'resendAvailableAt' => $challenge?->resend_available_at?->timestamp ?? 0,
+            'resendAvailableAt' => $user->resend_available_at?->timestamp ?? 0,
         ]);
     }
 
-    public function store(Request $request, RegistrationVerification $verification): RedirectResponse
+    public function store(VerifyOtpRequest $request): RedirectResponse
     {
-        $gmail = $this->pendingGmail($request);
+        $attemptId = $request->session()->get('registration_attempt_id');
+        $pendingUser = $this->verificationService->findPendingUser($attemptId);
 
-        if ($gmail === null) {
+        if (! $pendingUser) {
             return redirect()->route('register.create')->withErrors([
-                'registration' => 'اطلاعات ثبت‌نام موجود نیست. لطفاً دوباره ثبت‌نام کنید.',
+                'registration' => 'درخواست ثبت‌نام فعالی وجود ندارد.',
             ]);
         }
 
-        $validatedCode = $request->validate([
-            'code' => ['required', 'digits:6'],
-        ], [
-            'code.required' => 'وارد کردن کد تأیید الزامی است.',
-            'code.digits' => 'کد تأیید باید دقیقاً ۶ رقم باشد.',
-        ]);
-
-        $registration = $request->session()->get('registration');
-        $passwordHash = is_array($registration) ? ($registration['password_hash'] ?? null) : null;
-
-        if (! is_string($passwordHash) || Hash::needsRehash($passwordHash)) {
-            $request->session()->forget('registration');
-
-            return redirect()->route('register.create')->withErrors([
-                'registration' => 'اطلاعات ثبت‌نام کامل نیست. لطفاً دوباره ثبت‌نام کنید.',
-            ]);
-        }
-
-        $registrationValidator = Validator::make(
-            is_array($registration) ? $registration : [],
-            RegistrationValidation::rules(),
-            RegistrationValidation::messages(),
-        );
-
-        if ($registrationValidator->fails()) {
-            return redirect()
-                ->route('register.create')
-                ->withErrors($registrationValidator)
-                ->withInput(is_array($registration) ? $registration : []);
-        }
-
-        $validatedRegistration = $registrationValidator->validated();
-
-        try {
-            $user = DB::transaction(function () use ($gmail, $passwordHash, $validatedCode, $validatedRegistration, $verification): User {
-                $challenge = RegistrationVerificationModel::query()
-                    ->where('gmail', $gmail)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (! $challenge || ! $verification->isValid($challenge, $validatedCode['code'])) {
-                    throw ValidationException::withMessages([
-                        'code' => 'کد تأیید واردشده صحیح نیست یا منقضی شده است.',
-                    ]);
-                }
-
-                $user = User::create([
-                    ...$validatedRegistration,
-                    'password' => $passwordHash,
-                ]);
-
-                $user->forceFill(['gmail_verified_at' => now()])->save();
-                $challenge->delete();
-
-                return $user;
-            });
-        } catch (QueryException) {
-            return redirect()
-                ->route('register.create')
-                ->withErrors([
-                    'registration' => 'اطلاعات واردشده قبلاً ثبت شده است. لطفاً اطلاعات دیگری وارد کنید.',
-                ])
-                ->withInput($validatedRegistration);
-        }
-
-        event(new Registered($user));
-        Auth::login($user);
+        $this->verificationService->verify($pendingUser->registration_attempt_id, $request->validated('code'));
         $request->session()->regenerate();
-        $request->session()->forget(['registration', 'verification.completed']);
+        $request->session()->forget('registration_attempt_id');
 
         return redirect()->route('dashboard');
     }
 
-    public function resend(Request $request, RegistrationVerification $verification): RedirectResponse
+    public function resend(ResendOtpRequest $request): RedirectResponse
     {
-        $gmail = $this->pendingGmail($request);
+        $user = $this->otpResendService->resend(
+            $request->session()->get('registration_attempt_id'),
+        );
 
-        if ($gmail === null) {
+        if (! $user) {
             return redirect()->route('register.create')->withErrors([
-                'registration' => 'اطلاعات ثبت‌نام موجود نیست. لطفاً دوباره ثبت‌نام کنید.',
+                'registration' => 'درخواست ثبت‌نام فعالی وجود ندارد.',
             ]);
         }
 
-        $verification->resend($gmail);
-
         return back()->with('status', 'verification-code-resent');
-    }
-
-    private function pendingGmail(Request $request): ?string
-    {
-        $registration = $request->session()->get('registration');
-        $gmail = is_array($registration) ? ($registration['gmail'] ?? null) : null;
-
-        return is_string($gmail) && $gmail !== '' ? $gmail : null;
     }
 }
